@@ -2,12 +2,22 @@
 
 Minimal Home Assistant integration for fuel prices, powered by the `spritter` core library.
 
-## Install (HACS)
+## Installation
+
+### HACS
+
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=spritter-org&repository=spritter-ha&category=integration)
 
 1. Open HACS > Integrations > Menu > **Custom repositories**.
-2. Add `https://github.com/spritter-org/spritter-ha` and choose type **Integration**.
-3. Install **Spritter** from HACS.
-4. Restart Home Assistant.
+2. Add `https://github.com/spritter-org/spritter-ha` and choose type **Integration**
+3. Install **Spritter** from HACS
+4. Restart Home Assistant
+
+### Manual Installation
+
+1. Clone this repository.
+2. Copy the `custom_components/spritter` folder into your `homeassistant/custom_components/` directory.
+3. Restart Home Assistant
 
 ## Development
 
