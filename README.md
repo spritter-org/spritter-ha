@@ -19,15 +19,6 @@ Minimal Home Assistant integration for fuel prices, powered by the `spritter` co
 2. Copy the `custom_components/spritter` folder into your `homeassistant/custom_components/` directory.
 3. Restart Home Assistant
 
-## Development
-
-Install development dependencies:
-
-```bash
-python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
-```
-
 ## Configuration
 
 > Get supported providers and station IDs can be found in the [spritter library repository](https://github.com/spritter-org/spritter/?tab=readme-ov-file#providers)
@@ -60,25 +51,20 @@ sensor:
           - super
 ```
 
-### Source options
+**Schema:**
 
-- `provider` (required): provider id, e.g. `jet`, `omv`, `avanti`
-- `station_id` (required): station identifier for the provider
-- `name` (optional): Home Assistant entity name
-- `user_agent` (optional): custom user agent sent to provider
-- `keys` (optional): filter returned fuel types
+| Option       | Required | Description                              |
+| ------------ | -------- | ---------------------------------------- |
+| `provider`   | Yes      | Provider id, e.g. `jet`, `omv`, `avanti` |
+| `station_id` | Yes      | Station identifier for the provider      |
+| `name`       | No       | Home Assistant entity name               |
+| `keys`       | No       | Filter returned fuel types               |
 
-## Entities
+## Development
 
-Creates one device per configured source (petrol station).
+Install development dependencies:
 
-- Device: station (`provider` + `station_id`)
-- Entities: one numeric sensor per fuel type (for example `diesel`, `super`)
-- Sensor state: current fuel price as number (unit `€/L`)
-- Sensor attributes:
-  - `provider`
-  - `station_id`
-  - `fuel_type`
-  - `keys` (if configured)
-
-Because fuel prices are exposed as numeric sensor states, they can be used in Home Assistant long-term statistics and statistical history views.
+```bash
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+```
