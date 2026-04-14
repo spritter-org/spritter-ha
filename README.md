@@ -30,7 +30,7 @@ python -m pip install -e ".[dev]"
 
 ## Configuration
 
-> Get supported providers and station IDs can be found in the [spritter library rpeository](https://github.com/spritter-org/spritter/README.md#Providers)
+> Get supported providers and station IDs can be found in the [spritter library repository](https://github.com/spritter-org/spritter/?tab=readme-ov-file#providers)
 
 ### UI setup (recommended)
 
