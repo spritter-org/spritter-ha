@@ -38,7 +38,7 @@ Add the platform in `configuration.yaml`:
 sensor:
   - platform: spritter
     scan_interval:
-      minutes: 5
+      minutes: 15
     sources:
       - provider: jet
         station_id: "2640f98f48"
