@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spritter-ha-dev"
+version = "0.0.0"
+description = "Development dependencies for Spritter Home Assistant integration"
+requires-python = ">=3.12"
+dependencies = [
+  "spritter @ git+https://github.com/spritter-org/spritter.git",
+]
+
+[project.optional-dependencies]
+dev = [
+  "homeassistant",
+  "voluptuous",
+  "pytest-homeassistant-custom-component",
+  "ruff",
+  "mypy",
+]
+
+[tool.setuptools]
+packages = []
+py-modules = []
+
+[tool.mypy]
+explicit_package_bases = true
