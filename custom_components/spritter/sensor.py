@@ -35,7 +35,7 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-PRICE_UNIT = "€/L"
+PRICE_UNIT = "€"
 
 CONF_USER_AGENT = "user_agent"
 CONF_KEYS = "keys"
