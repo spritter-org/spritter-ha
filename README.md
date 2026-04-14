@@ -30,6 +30,8 @@ python -m pip install -e ".[dev]"
 
 ## Configuration
 
+> Get supported providers and station IDs can be found in the [spritter library rpeository](https://github.com/spritter-org/spritter/README.md#Providers)
+
 ### UI setup (recommended)
 
 1. Go to **Settings > Devices & Services > Add Integration**.
