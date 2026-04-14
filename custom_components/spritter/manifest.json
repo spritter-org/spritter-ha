@@ -1,7 +1,7 @@
 {
   "domain": "spritter",
   "name": "Spritter",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "documentation": "https://github.com/spritter-org/spritter-ha",
   "config_flow": true,
   "codeowners": [
