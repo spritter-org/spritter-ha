@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -44,7 +45,7 @@ class MqttConfig:
 class AppConfig:
     refresh_interval_seconds: int = 300
     max_parallelism: int = DEFAULT_MAX_PARALLELISM
-    mqtt: MqttConfig | None = None
+    mqtt: MqttConfig = field(default_factory=lambda: MqttConfig(host="core-mosquitto"))
     stations: list[StationConfig] = field(default_factory=list)
 
 
@@ -52,45 +53,47 @@ def _clamp(value: int, lower: int, upper: int) -> int:
     return max(lower, min(upper, value))
 
 
+def _to_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 class ConfigStore:
     def __init__(self, config_path: Path) -> None:
         self._config_path = config_path
 
-    def _build_mqtt_config(self, raw: dict[str, Any]) -> MqttConfig | None:
-        mqtt_raw = raw.get("mqtt", {})
-        if not isinstance(mqtt_raw, dict):
-            LOGGER.warning("Config field 'mqtt' must be a JSON object")
-            return None
+    def _build_mqtt_config(self) -> MqttConfig:
+        host = str(os.getenv("MQTT_HOST") or "core-mosquitto").strip()
+        port = _clamp(
+            _to_int(os.getenv("MQTT_PORT", 1883), 1883),
+            1,
+            65535,
+        )
+        username = str(os.getenv("MQTT_USER", "")).strip() or None
+        password = os.getenv("MQTT_PASSWORD") or None
 
-        host = str(mqtt_raw.get("host", "")).strip()
-        if not host:
-            return None
-
-        topic_prefix = str(mqtt_raw.get("topic_prefix", "spritter/stations")).strip(" /")
         return MqttConfig(
             host=host,
-            port=_clamp(int(mqtt_raw.get("port", 1883)), 1, 65535),
-            username=(str(mqtt_raw["username"]) if mqtt_raw.get("username") else None),
-            password=(str(mqtt_raw["password"]) if mqtt_raw.get("password") else None),
-            topic_prefix=topic_prefix or "spritter/stations",
-            client_id=str(mqtt_raw.get("client_id", "spritter-addon")).strip() or "spritter-addon",
-            qos=_clamp(int(mqtt_raw.get("qos", 0)), 0, 2),
-            retain=bool(mqtt_raw.get("retain", False)),
+            port=port,
+            username=username,
+            password=password,
         )
 
     def _load(self) -> AppConfig:
         if not self._config_path.exists():
-            return AppConfig()
+            return AppConfig(mqtt=self._build_mqtt_config())
 
         try:
             raw = json.loads(self._config_path.read_text(encoding="utf-8"))
         except Exception as err:  # pragma: no cover
             LOGGER.warning("Could not read config file: %s", err)
-            return AppConfig()
+            return AppConfig(mqtt=self._build_mqtt_config())
 
         if not isinstance(raw, dict):
             LOGGER.warning("Config file must contain a JSON object")
-            return AppConfig()
+            return AppConfig(mqtt=self._build_mqtt_config())
 
         stations = [
             StationConfig(
@@ -110,7 +113,7 @@ class ConfigStore:
         return AppConfig(
             refresh_interval_seconds=refresh_interval_seconds,
             max_parallelism=max_parallelism,
-            mqtt=self._build_mqtt_config(raw),
+            mqtt=self._build_mqtt_config(),
             stations=stations,
         )
 
@@ -209,8 +212,6 @@ async def run() -> None:
 
         if not config.stations:
             LOGGER.warning("No stations configured, waiting for next cycle")
-        elif config.mqtt is None:
-            LOGGER.warning("No MQTT broker configured under 'mqtt.host', waiting for next cycle")
         else:
             station_payloads = await collect_station_payloads(config)
             if station_payloads:

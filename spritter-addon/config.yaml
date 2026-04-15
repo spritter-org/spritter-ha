@@ -16,4 +16,4 @@ arch:
 map:
   - addon_config:rw
 services:
-  - mqtt:true
+  - mqtt: true
