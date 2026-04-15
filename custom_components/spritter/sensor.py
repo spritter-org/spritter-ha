@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 from numbers import Real
 from typing import Any
@@ -196,6 +196,7 @@ class SpritterStationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         update_interval: timedelta,
     ) -> None:
         self._source = source
+        self.last_update_success_time: datetime | None = None
         super().__init__(
             hass,
             _LOGGER,
@@ -220,7 +221,7 @@ class SpritterStationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     for fuel_type, price in price_map.items()
                 }
 
-            return await asyncio.wait_for(
+            data = await asyncio.wait_for(
                 self.hass.async_add_executor_job(_fetch_prices),
                 timeout=REQUEST_TIMEOUT_SECONDS,
             )
@@ -230,6 +231,8 @@ class SpritterStationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ) from err
         except Exception as err:
             raise UpdateFailed(str(err)) from err
+        self.last_update_success_time = datetime.now(timezone.utc)
+        return data
 
 
 class SpritterFuelPriceSensor(SensorEntity):
