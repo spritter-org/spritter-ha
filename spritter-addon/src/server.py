@@ -211,17 +211,22 @@ def publish_station_payloads(
             for fuel_type in station["prices"].keys():
                 safe_id = station_id.replace(".", "_").replace("-", "_")
                 node_id = f"spritter_{provider}_{safe_id}"
+                
+                # Create a safe string without spaces for IDs and Topics
+                safe_fuel = fuel_type.replace(" ", "_")
 
-                config_topic = f"homeassistant/sensor/{node_id}/{fuel_type}/config"
+                config_topic = f"homeassistant/sensor/{node_id}/{safe_fuel}/config"
                 config_payload = {
                     "name": fuel_type.capitalize(),
-                    "object_id": f"{node_id}_{fuel_type}",
-                    "unique_id": f"{node_id}_{fuel_type}",
+                    "object_id": f"{node_id}_{safe_fuel}",
+                    "unique_id": f"{node_id}_{safe_fuel}",
                     "state_topic": topic,
-                    "value_template": f"{{{{ value_json.station.prices.{fuel_type} }}}}",
+                    # Fix Jinja2 template to use bracket notation
+                    "value_template": f"{{{{ value_json.station.prices['{fuel_type}'] }}}}",
                     "unit_of_measurement": "€",
                     "device_class": "monetary",
                     "state_class": "measurement",
+                    "icon": "mdi:gas-station",
                     "device": {
                         "identifiers": [node_id],
                         "name": station["name"],
