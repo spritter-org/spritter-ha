@@ -1,7 +1,7 @@
 name: "Spritter"
 version: "1.0.8"
 slug: "spritter"
-description: Async fuel price collector that publishes station updates to MQTT.
+description: Fuel price getter with MQTT support
 url: https://github.com/spritter-org/spritter-ha
 startup: application
 boot: auto
