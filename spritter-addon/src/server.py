@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from threading import RLock
 from typing import Any
 
-from flask import Flask, jsonify, request, send_from_directory
+from fastapi import FastAPI, HTTPException, Query
 from spritter import FuelStationRequest, get_fuel_prices
 
 LOGGER = logging.getLogger("spritter_addon")
@@ -38,8 +37,6 @@ class AppConfig:
 class ConfigStore:
     def __init__(self, config_path: Path) -> None:
         self._config_path = config_path
-        self._lock = RLock()
-        self._config = self._load()
 
     def _load(self) -> AppConfig:
         if not self._config_path.exists():
@@ -49,6 +46,10 @@ class ConfigStore:
             raw = json.loads(self._config_path.read_text(encoding="utf-8"))
         except Exception as err:  # pragma: no cover
             LOGGER.warning("Could not read config file: %s", err)
+            return AppConfig()
+
+        if not isinstance(raw, dict):
+            LOGGER.warning("Config file must contain a JSON object")
             return AppConfig()
 
         stations = [
@@ -68,64 +69,15 @@ class ConfigStore:
         ]
 
         refresh_interval_seconds = int(raw.get("refresh_interval_seconds", 300))
-        if refresh_interval_seconds < 10:
-            refresh_interval_seconds = 10
+        refresh_interval_seconds = max(10, min(3600, refresh_interval_seconds))
 
         return AppConfig(
             refresh_interval_seconds=refresh_interval_seconds,
             stations=stations,
         )
 
-    def _save(self) -> None:
-        self._config_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "refresh_interval_seconds": self._config.refresh_interval_seconds,
-            "stations": [asdict(station) for station in self._config.stations],
-        }
-        self._config_path.write_text(
-            json.dumps(payload, indent=2, sort_keys=True),
-            encoding="utf-8",
-        )
-
     def get(self) -> AppConfig:
-        with self._lock:
-            return AppConfig(
-                refresh_interval_seconds=self._config.refresh_interval_seconds,
-                stations=[StationConfig(**asdict(station)) for station in self._config.stations],
-            )
-
-    def replace(self, payload: dict[str, Any]) -> AppConfig:
-        stations_payload = payload.get("stations", [])
-        stations: list[StationConfig] = []
-        for entry in stations_payload:
-            provider = str(entry.get("provider", "")).strip()
-            station_id = str(entry.get("station_id", "")).strip()
-            if not provider or not station_id:
-                continue
-            stations.append(
-                StationConfig(
-                    provider=provider,
-                    station_id=station_id,
-                    name=(str(entry["name"]).strip() if entry.get("name") else None),
-                    keys=[str(k).strip() for k in entry.get("keys", []) if str(k).strip()] or None,
-                    user_agent=(
-                        str(entry["user_agent"]).strip()
-                        if entry.get("user_agent")
-                        else None
-                    ),
-                )
-            )
-
-        refresh_interval_seconds = int(payload.get("refresh_interval_seconds", 300))
-        refresh_interval_seconds = max(10, min(3600, refresh_interval_seconds))
-
-        with self._lock:
-            self._config = AppConfig(
-                refresh_interval_seconds=refresh_interval_seconds,
-                stations=stations,
-            )
-            self._save()
-            return self.get()
+        return self._load()
 
 
 def build_price_map(config: AppConfig) -> list[dict[str, Any]]:
@@ -157,61 +109,85 @@ def build_price_map(config: AppConfig) -> list[dict[str, Any]]:
     return stations_payload
 
 
-app = Flask(__name__, static_folder="static")
+def find_station_config(
+    config: AppConfig, provider: str, station_id: str
+) -> StationConfig | None:
+    provider_key = provider.strip().lower()
+    station_key = station_id.strip()
+
+    for station in config.stations:
+        if (
+            station.provider.strip().lower() == provider_key
+            and station.station_id.strip() == station_key
+        ):
+            return station
+
+    return None
+
+
+def build_station_payload(
+    provider: str,
+    station_id: str,
+    station_config: StationConfig | None,
+) -> dict[str, Any]:
+    request_obj = FuelStationRequest(
+        provider=provider,
+        station_id=station_id,
+        keys=tuple(station_config.keys) if station_config and station_config.keys else None,
+        user_agent=station_config.user_agent if station_config else None,
+    )
+
+    price_map = get_fuel_prices(request_obj).to_price_map(
+        keys=tuple(station_config.keys) if station_config and station_config.keys else None
+    )
+
+    return {
+        "provider": provider,
+        "station_id": station_id,
+        "name": (
+            station_config.name
+            if station_config and station_config.name
+            else f"{provider.upper()} {station_id}"
+        ),
+        "prices": {fuel_type: float(price) for fuel_type, price in price_map.items()},
+    }
+
+
+app = FastAPI(title="Spritter Add-On")
 store = ConfigStore(CONFIG_FILE)
 
 
-@app.route("/")
-def index() -> Any:
-    return send_from_directory(app.static_folder, "index.html")
+@app.get("/")
+def root() -> dict[str, str]:
+    return {"status": "ok", "service": "spritter-addon"}
 
 
-@app.route("/static/<path:path>")
-def static_proxy(path: str) -> Any:
-    return send_from_directory(app.static_folder, path)
-
-
-@app.get("/api/v1/config")
-def get_config() -> Any:
+@app.get("/prices/")
+def get_prices(
+    provider: str = Query(..., min_length=1),
+    station_id: str = Query(..., alias="id", min_length=1),
+) -> dict[str, Any]:
     config = store.get()
-    return jsonify(
-        {
-            "refresh_interval_seconds": config.refresh_interval_seconds,
-            "stations": [asdict(station) for station in config.stations],
-        }
-    )
-
-
-@app.put("/api/v1/config")
-def put_config() -> Any:
-    payload = request.get_json(silent=True) or {}
-    config = store.replace(payload)
-    return jsonify(
-        {
-            "refresh_interval_seconds": config.refresh_interval_seconds,
-            "stations": [asdict(station) for station in config.stations],
-        }
-    )
-
-
-@app.get("/api/v1/price-map")
-def get_price_map() -> Any:
-    config = store.get()
+    station_cfg = find_station_config(config, provider=provider, station_id=station_id)
 
     try:
-        stations = build_price_map(config)
+        station = build_station_payload(
+            provider=provider,
+            station_id=station_id,
+            station_config=station_cfg,
+        )
     except Exception as err:
-        LOGGER.exception("Failed to build price map")
-        return jsonify({"error": str(err)}), 502
+        LOGGER.exception("Failed to build station prices")
+        raise HTTPException(status_code=502, detail=str(err))
 
-    return jsonify(
-        {
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "refresh_interval_seconds": config.refresh_interval_seconds,
-            "stations": stations,
-        }
-    )
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "refresh_interval_seconds": config.refresh_interval_seconds,
+        "station": station,
+    }
 
 
 if __name__ == "__main__":
-    app.run(host=HOST, port=PORT)
+    import uvicorn
+
+    uvicorn.run("server:app", host=HOST, port=PORT)

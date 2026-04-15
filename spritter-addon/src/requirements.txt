@@ -1,2 +1,3 @@
-flask==3.0.3
+fastapi==0.115.12
+uvicorn==0.34.2
 spritter @ git+https://github.com/spritter-org/spritter.git
