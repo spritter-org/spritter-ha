@@ -17,4 +17,7 @@ COPY src/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ /app/
-CMD ["python", "server.py"]
+COPY run.sh /app/run.sh
+RUN chmod a+x /app/run.sh
+
+CMD ["/app/run.sh"]

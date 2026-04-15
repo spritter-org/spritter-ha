@@ -4,7 +4,9 @@ import asyncio
 import json
 import logging
 import os
+import signal
 import threading
+from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -72,7 +74,7 @@ class ConfigStore:
             1,
             65535,
         )
-        username = str(os.getenv("MQTT_USER", "")).strip() or None
+        username = str(os.getenv("MQTT_USERNAME") or os.getenv("MQTT_USER") or "").strip() or None
         password = os.getenv("MQTT_PASSWORD") or None
 
         return MqttConfig(
@@ -253,8 +255,22 @@ async def run() -> None:
         await asyncio.sleep(config.refresh_interval_minutes * 60)
 
 
+async def main() -> None:
+    loop = asyncio.get_running_loop()
+    stop_event = asyncio.Event()
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop_event.set)
+
+    task = asyncio.create_task(run())
+
+    await stop_event.wait()
+    LOGGER.info("Received stop signal, shutting down cleanly...")
+
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        await task
+
+
 if __name__ == "__main__":
-    try:
-        asyncio.run(run())
-    except KeyboardInterrupt:
-        LOGGER.info("Shutting down")
+    asyncio.run(main())
