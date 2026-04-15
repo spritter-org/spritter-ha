@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-RUN apk add --no-cache bash
+RUN apk add --no-cache bash git
 
 COPY src/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
