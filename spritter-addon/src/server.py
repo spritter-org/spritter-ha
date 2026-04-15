@@ -222,12 +222,19 @@ def publish_station_payloads(
             station_id = station["station_id"]
             topic = f"{mqtt_config.topic_prefix}/{provider}/{station_id}"
 
+            safe_id = _normalize_id(station_id)
+            safe_provider = _normalize_id(provider)
+            node_id = f"spritter_{safe_provider}_{safe_id}"
+            
+            device_info = {
+                "identifiers": [node_id],
+                "name": station["name"],
+                "manufacturer": "Spritter",
+                "model": f"{provider} ({station_id})",
+            }
+
             # Publish Auto-Discovery configs so Home Assistant can create entities per fuel type.
             for fuel_type in station["prices"].keys():
-                safe_id = _normalize_id(station_id)
-                safe_provider = _normalize_id(provider)
-                node_id = f"spritter_{safe_provider}_{safe_id}"
-                
                 safe_fuel = _normalize_id(fuel_type)
 
                 config_topic = f"homeassistant/sensor/{node_id}/{safe_fuel}/config"
@@ -236,20 +243,57 @@ def publish_station_payloads(
                     "object_id": f"{node_id}_{safe_fuel}",
                     "unique_id": f"{node_id}_{safe_fuel}",
                     "state_topic": topic,
-                    # Jinja2 template requires original fuel type to parse JSON payload correctly
-                    "value_template": f"{{{{ value_json.station.prices['{fuel_type}'] }}}}",
+                    # Jinja2 template with safe fallback and float cast
+                    "value_template": f"{{{{ value_json.station.prices.get('{fuel_type}', 'unavailable') | float(default='unavailable') }}}}",
                     "unit_of_measurement": "€",
                     "device_class": "monetary",
                     "state_class": "measurement",
                     "icon": "mdi:gas-station",
-                    "device": {
-                        "identifiers": [node_id],
-                        "name": station["name"],
-                        "manufacturer": "Spritter",
-                        "model": f"{provider} ({station_id})",
-                    },
+                    "device": device_info,
                 }
                 client.publish(config_topic, json.dumps(config_payload), qos=1, retain=True)
+
+            # Diagnostic: Last Update Timestamp
+            ts_topic = f"homeassistant/sensor/{node_id}/last_update/config"
+            client.publish(ts_topic, json.dumps({
+                "name": "Last Update",
+                "object_id": f"{node_id}_last_update",
+                "unique_id": f"{node_id}_last_update",
+                "state_topic": topic,
+                "value_template": "{{ value_json.generated_at }}",
+                "device_class": "timestamp",
+                "entity_category": "diagnostic",
+                "icon": "mdi:clock",
+                "device": device_info,
+            }), qos=1, retain=True)
+
+            # Diagnostic: Provider Name (Disabled by default)
+            prov_topic = f"homeassistant/sensor/{node_id}/provider/config"
+            client.publish(prov_topic, json.dumps({
+                "name": "Provider",
+                "object_id": f"{node_id}_provider",
+                "unique_id": f"{node_id}_provider",
+                "state_topic": topic,
+                "value_template": "{{ value_json.station.provider }}",
+                "entity_category": "diagnostic",
+                "enabled_by_default": False,
+                "icon": "mdi:domain",
+                "device": device_info,
+            }), qos=1, retain=True)
+
+            # Diagnostic: Station ID (Disabled by default)
+            id_topic = f"homeassistant/sensor/{node_id}/station_id/config"
+            client.publish(id_topic, json.dumps({
+                "name": "Station ID",
+                "object_id": f"{node_id}_station_id",
+                "unique_id": f"{node_id}_station_id",
+                "state_topic": topic,
+                "value_template": "{{ value_json.station.station_id }}",
+                "entity_category": "diagnostic",
+                "enabled_by_default": False,
+                "icon": "mdi:identifier",
+                "device": device_info,
+            }), qos=1, retain=True)
 
             payload = {
                 "generated_at": generated_at,
@@ -264,7 +308,9 @@ def publish_station_payloads(
                 json.dumps(payload, separators=(",", ":")),
             )
             message = json.dumps(payload, separators=(",", ":"))
-            publish_result = client.publish(topic, message, qos=mqtt_config.qos, retain=mqtt_config.retain)
+            
+            # Force retain=True for the state payload
+            publish_result = client.publish(topic, message, qos=mqtt_config.qos, retain=True)
             publish_result.wait_for_publish()
 
         summary_topic = f"{mqtt_config.topic_prefix}/_summary"
