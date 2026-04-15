@@ -16,7 +16,7 @@ LOGGER = logging.getLogger("spritter_addon")
 logging.basicConfig(level=logging.INFO)
 
 DATA_DIR = Path("/data")
-CONFIG_FILE = DATA_DIR / "spritter_config.json"
+CONFIG_FILE = DATA_DIR / "options.json"
 DEFAULT_MAX_PARALLELISM = 6
 
 
@@ -43,7 +43,7 @@ class MqttConfig:
 
 @dataclass(slots=True)
 class AppConfig:
-    refresh_interval_seconds: int = 300
+    refresh_interval_minutes: int = 5
     max_parallelism: int = DEFAULT_MAX_PARALLELISM
     mqtt: MqttConfig = field(default_factory=lambda: MqttConfig(host="core-mosquitto"))
     stations: list[StationConfig] = field(default_factory=list)
@@ -83,6 +83,7 @@ class ConfigStore:
 
     def _load(self) -> AppConfig:
         if not self._config_path.exists():
+            LOGGER.warning("Config file %s does not exist", self._config_path)
             return AppConfig(mqtt=self._build_mqtt_config())
 
         try:
@@ -107,11 +108,11 @@ class ConfigStore:
             if str(item.get("provider", "")).strip() and str(item.get("station_id", "")).strip()
         ]
 
-        refresh_interval_seconds = _clamp(int(raw.get("refresh_interval_seconds", 300)), 10, 3600)
-        max_parallelism = _clamp(int(raw.get("max_parallelism", DEFAULT_MAX_PARALLELISM)), 1, 32)
+        refresh_interval_minutes = _clamp(_to_int(raw.get("refresh_interval_minutes"), 5), 1, 10080)
+        max_parallelism = _clamp(_to_int(raw.get("max_parallelism"), DEFAULT_MAX_PARALLELISM), 1, 32)
 
         return AppConfig(
-            refresh_interval_seconds=refresh_interval_seconds,
+            refresh_interval_minutes=refresh_interval_minutes,
             max_parallelism=max_parallelism,
             mqtt=self._build_mqtt_config(),
             stations=stations,
@@ -169,7 +170,7 @@ async def collect_station_payloads(config: AppConfig) -> list[dict[str, Any]]:
 def publish_station_payloads(
     mqtt_config: MqttConfig,
     generated_at: str,
-    refresh_interval_seconds: int,
+    refresh_interval_minutes: int,
     stations: list[dict[str, Any]],
 ) -> None:
     client = mqtt.Client(client_id=mqtt_config.client_id)
@@ -183,7 +184,7 @@ def publish_station_payloads(
             topic = f"{mqtt_config.topic_prefix}/{station['provider']}/{station['station_id']}"
             payload = {
                 "generated_at": generated_at,
-                "refresh_interval_seconds": refresh_interval_seconds,
+                "refresh_interval_minutes": refresh_interval_minutes,
                 "station": station,
             }
             message = json.dumps(payload, separators=(",", ":"))
@@ -193,7 +194,7 @@ def publish_station_payloads(
         summary_topic = f"{mqtt_config.topic_prefix}/_summary"
         summary_payload = {
             "generated_at": generated_at,
-            "refresh_interval_seconds": refresh_interval_seconds,
+            "refresh_interval_minutes": refresh_interval_minutes,
             "published_stations": len(stations),
         }
         summary_message = json.dumps(summary_payload, separators=(",", ":"))
@@ -220,7 +221,7 @@ async def run() -> None:
                         publish_station_payloads,
                         config.mqtt,
                         generated_at,
-                        config.refresh_interval_seconds,
+                        config.refresh_interval_minutes,
                         station_payloads,
                     )
                     LOGGER.info("Published %s station payloads", len(station_payloads))
@@ -229,7 +230,7 @@ async def run() -> None:
             else:
                 LOGGER.warning("No station payloads fetched successfully in this cycle")
 
-        await asyncio.sleep(config.refresh_interval_seconds)
+        await asyncio.sleep(config.refresh_interval_minutes * 60)
 
 
 if __name__ == "__main__":

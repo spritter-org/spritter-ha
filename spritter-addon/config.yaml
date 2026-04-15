@@ -1,5 +1,5 @@
 name: "Spritter"
-version: "1.0.0"
+version: "1.0.1"
 slug: "spritter"
 description: Async fuel price collector that publishes station updates to MQTT.
 url: https://github.com/spritter-org/spritter-ha
@@ -12,5 +12,15 @@ services:
 arch:
   - aarch64
   - amd64
-map:
-  - addon_config:rw
+options:
+  refresh_interval_minutes: 5
+  stations: []
+schema:
+  refresh_interval_minutes: int(1,10080)
+  stations:
+    - provider: str
+      station_id: str
+      name: str?
+      keys:
+        - str?
+      user_agent: str?
