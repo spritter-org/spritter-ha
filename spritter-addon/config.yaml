@@ -1,5 +1,5 @@
 name: Spritter Add-On
-version: 0.2.0
+version: 0.2.1
 slug: spritter_addon
 description: Fuel price map API with basic station management UI.
 url: https://github.com/spritter-org/spritter-ha
