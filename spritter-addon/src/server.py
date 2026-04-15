@@ -226,7 +226,7 @@ def publish_station_payloads(
                         "identifiers": [node_id],
                         "name": station["name"],
                         "manufacturer": "Spritter",
-                        "model": f"{provider}-{station_id}",
+                        "model": f"{provider} ({station_id})",
                     },
                 }
                 client.publish(config_topic, json.dumps(config_payload), qos=1, retain=True)
