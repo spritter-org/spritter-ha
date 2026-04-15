@@ -1,5 +1,5 @@
 name: "Spritter"
-version: "1.0.3"
+version: "1.0.4"
 slug: "spritter"
 description: Async fuel price collector that publishes station updates to MQTT.
 url: https://github.com/spritter-org/spritter-ha

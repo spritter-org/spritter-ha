@@ -203,7 +203,33 @@ def publish_station_payloads(
             raise RuntimeError(f"MQTT connection failed: {connect_error[0]}")
 
         for station in stations:
-            topic = f"{mqtt_config.topic_prefix}/{station['provider']}/{station['station_id']}"
+            provider = station["provider"]
+            station_id = station["station_id"]
+            topic = f"{mqtt_config.topic_prefix}/{provider}/{station_id}"
+
+            # Publish Auto-Discovery configs so Home Assistant can create entities per fuel type.
+            for fuel_type in station["prices"].keys():
+                safe_id = station_id.replace(".", "_").replace("-", "_")
+                node_id = f"spritter_{provider}_{safe_id}"
+
+                config_topic = f"homeassistant/sensor/{node_id}/{fuel_type}/config"
+                config_payload = {
+                    "name": fuel_type.capitalize(),
+                    "object_id": f"{node_id}_{fuel_type}",
+                    "unique_id": f"{node_id}_{fuel_type}",
+                    "state_topic": topic,
+                    "value_template": f"{{{{ value_json.station.prices.{fuel_type} }}}}",
+                    "unit_of_measurement": "€",
+                    "device_class": "monetary",
+                    "state_class": "measurement",
+                    "device": {
+                        "identifiers": [node_id],
+                        "name": station["name"],
+                        "manufacturer": provider.upper(),
+                    },
+                }
+                client.publish(config_topic, json.dumps(config_payload), qos=1, retain=True)
+
             payload = {
                 "generated_at": generated_at,
                 "refresh_interval_minutes": refresh_interval_minutes,
