@@ -9,21 +9,21 @@
         }
       },
       "source": {
-        "title": "Add source",
-        "description": "Add at least one provider and station ID pair.",
+        "title": "Add station",
+        "description": "Add at least one station.",
         "data": {
-          "provider": "Provider",
+          "provider": "Provider name",
           "station_id": "Station ID",
-          "add_another": "Add another source"
+          "add_another": "Add another station"
         }
       }
     },
     "error": {
-      "empty_value": "Provider and station ID are required."
+      "empty_value": "Provider name and station ID are required."
     },
     "abort": {
       "single_instance_allowed": "Only one Spritter configuration is allowed.",
-      "no_sources": "At least one source is required."
+      "no_sources": "At least one station is required."
     }
   },
   "options": {
@@ -32,8 +32,8 @@
         "title": "Configure Spritter",
         "menu_options": {
           "edit_base": "Edit base configuration",
-          "add_source": "Add provider/station pair",
-          "remove_source": "Remove provider/station pair",
+          "add_source": "Add station",
+          "remove_source": "Remove station",
           "finish": "Save and close"
         }
       },
@@ -44,16 +44,16 @@
         }
       },
       "add_source": {
-        "title": "Add source",
+        "title": "Add station",
         "data": {
           "provider": "Provider",
           "station_id": "Station ID"
         }
       },
       "remove_source": {
-        "title": "Remove source",
+        "title": "Remove station",
         "data": {
-          "source_index": "Source"
+          "source_index": "Station"
         }
       }
     },
@@ -61,7 +61,7 @@
       "empty_value": "Provider and station ID are required."
     },
     "abort": {
-      "no_sources": "At least one source is required."
+      "no_sources": "At least one station is required."
     }
   }
 }

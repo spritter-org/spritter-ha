@@ -1,0 +1,67 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Spritter einrichten",
+        "description": "Basis-Aktualisierungsintervall konfigurieren.",
+        "data": {
+          "scan_interval_minutes": "Scan-Intervall (Minuten)"
+        }
+      },
+      "source": {
+        "title": "Tankstelle hinzufügen",
+        "description": "Füge mindestens eine Tankstelle hinzu.",
+        "data": {
+          "provider": "Anbietername",
+          "station_id": "Tankstellen-ID",
+          "add_another": "Weitere Tankstelle hinzufügen"
+        }
+      }
+    },
+    "error": {
+      "empty_value": "Anbietername und Tankstellen-ID sind erforderlich."
+    },
+    "abort": {
+      "single_instance_allowed": "Es ist nur eine Spritter-Konfiguration erlaubt.",
+      "no_sources": "Mindestens eine Tankstelle ist erforderlich."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Spritter konfigurieren",
+        "menu_options": {
+          "edit_base": "Basis-Konfiguration bearbeiten",
+          "add_source": "Tankstelle hinzufügen",
+          "remove_source": "Tankstelle entfernen",
+          "finish": "Speichern und schließen"
+        }
+      },
+      "edit_base": {
+        "title": "Basis-Konfiguration",
+        "data": {
+          "scan_interval_minutes": "Scan-Intervall (Minuten)"
+        }
+      },
+      "add_source": {
+        "title": "Tankstelle hinzufügen",
+        "data": {
+          "provider": "Anbieter",
+          "station_id": "Tankstellen-ID"
+        }
+      },
+      "remove_source": {
+        "title": "Tankstelle entfernen",
+        "data": {
+          "source_index": "Tankstelle"
+        }
+      }
+    },
+    "error": {
+      "empty_value": "Anbieter und Tankstellen-ID sind erforderlich."
+    },
+    "abort": {
+      "no_sources": "Mindestens eine Tankstelle ist erforderlich."
+    }
+  }
+}
