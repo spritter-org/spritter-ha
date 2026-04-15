@@ -236,6 +236,13 @@ def publish_station_payloads(
                 "refresh_interval_minutes": refresh_interval_minutes,
                 "station": station,
             }
+            LOGGER.info(
+                "Publishing station %s/%s to %s with payload %s",
+                provider,
+                station_id,
+                topic,
+                json.dumps(payload, separators=(",", ":")),
+            )
             message = json.dumps(payload, separators=(",", ":"))
             publish_result = client.publish(topic, message, qos=mqtt_config.qos, retain=mqtt_config.retain)
             publish_result.wait_for_publish()
