@@ -224,8 +224,9 @@ def publish_station_payloads(
                     "state_class": "measurement",
                     "device": {
                         "identifiers": [node_id],
-                        "name": station["name"] or provider,
+                        "name": station["name"],
                         "manufacturer": "Spritter",
+                        "model": f"{provider}-{station_id}",
                     },
                 }
                 client.publish(config_topic, json.dumps(config_payload), qos=1, retain=True)
