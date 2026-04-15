@@ -1,2 +1,2 @@
 paho-mqtt==2.1.0
-spritter @ git+https://github.com/spritter-org/spritter.git
+spritter @ git+https://github.com/spritter-org/spritter.git@7d327e677f8c3a7cb0269493cdb3e2d147fabb06
