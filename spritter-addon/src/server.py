@@ -4,8 +4,10 @@ import asyncio
 import json
 import logging
 import os
+import re
 import signal
 import threading
+import unicodedata
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -60,6 +62,22 @@ def _to_int(value: Any, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _normalize_id(value: str) -> str:
+    """Robust normalizer for MQTT topics and Home Assistant entity IDs."""
+    value = value.lower()
+    # Explicitly handle common German characters before ASCII conversion
+    replacements = {"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"}
+    for search, replace in replacements.items():
+        value = value.replace(search, replace)
+        
+    # Decompose unicode, drop non-ascii, and convert to string
+    value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
+    # Replace any non-alphanumeric character with an underscore
+    value = re.sub(r'[^a-z0-9]', '_', value)
+    # Collapse multiple consecutive underscores into one and strip ends
+    return re.sub(r'_+', '_', value).strip('_')
 
 
 class ConfigStore:
@@ -206,11 +224,11 @@ def publish_station_payloads(
 
             # Publish Auto-Discovery configs so Home Assistant can create entities per fuel type.
             for fuel_type in station["prices"].keys():
-                safe_id = station_id.replace(".", "_").replace("-", "_")
-                node_id = f"spritter_{provider}_{safe_id}"
+                safe_id = _normalize_id(station_id)
+                safe_provider = _normalize_id(provider)
+                node_id = f"spritter_{safe_provider}_{safe_id}"
                 
-                # Create a safe string without spaces for IDs and Topics
-                safe_fuel = fuel_type.replace(" ", "_")
+                safe_fuel = _normalize_id(fuel_type)
 
                 config_topic = f"homeassistant/sensor/{node_id}/{safe_fuel}/config"
                 config_payload = {
@@ -218,7 +236,7 @@ def publish_station_payloads(
                     "object_id": f"{node_id}_{safe_fuel}",
                     "unique_id": f"{node_id}_{safe_fuel}",
                     "state_topic": topic,
-                    # Fix Jinja2 template to use bracket notation
+                    # Jinja2 template requires original fuel type to parse JSON payload correctly
                     "value_template": f"{{{{ value_json.station.prices['{fuel_type}'] }}}}",
                     "unit_of_measurement": "€",
                     "device_class": "monetary",
