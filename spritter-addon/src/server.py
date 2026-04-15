@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -173,13 +174,32 @@ def publish_station_payloads(
     refresh_interval_minutes: int,
     stations: list[dict[str, Any]],
 ) -> None:
-    client = mqtt.Client(client_id=mqtt_config.client_id)
+    client = mqtt.Client(
+        callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+        client_id=mqtt_config.client_id,
+    )
     if mqtt_config.username:
         client.username_pw_set(mqtt_config.username, mqtt_config.password)
+
+    connected = threading.Event()
+    connect_error: list[str | None] = [None]
+
+    def on_connect(client: mqtt.Client, userdata: Any, flags: Any, reason_code: Any, properties: Any) -> None:
+        if getattr(reason_code, "is_failure", False):
+            connect_error[0] = f"{reason_code}"
+        connected.set()
+
+    client.on_connect = on_connect
 
     client.connect(mqtt_config.host, mqtt_config.port, keepalive=60)
     client.loop_start()
     try:
+        if not connected.wait(timeout=10):
+            raise TimeoutError(f"Timed out waiting for MQTT connection to {mqtt_config.host}:{mqtt_config.port}")
+
+        if connect_error[0]:
+            raise RuntimeError(f"MQTT connection failed: {connect_error[0]}")
+
         for station in stations:
             topic = f"{mqtt_config.topic_prefix}/{station['provider']}/{station['station_id']}"
             payload = {
@@ -200,8 +220,8 @@ def publish_station_payloads(
         summary_message = json.dumps(summary_payload, separators=(",", ":"))
         client.publish(summary_topic, summary_message, qos=mqtt_config.qos, retain=mqtt_config.retain).wait_for_publish()
     finally:
-        client.loop_stop()
         client.disconnect()
+        client.loop_stop()
 
 
 async def run() -> None:
