@@ -1,70 +1,58 @@
-# Spritter Home Assistant Integration
+# Spritter Home Assistant Add-On
 
-Minimal Home Assistant integration for fuel prices, powered by the `spritter` core library.
+This repository now provides a Home Assistant Add-On (not a HACS custom component).
 
-## Installation
+The add-on:
+- fetches fuel prices using the `spritter` core library,
+- exposes an internal REST endpoint for price maps,
+- includes a basic web UI to manage stations and base settings.
 
-### HACS
+## Install As Add-On Repository
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=spritter-org&repository=spritter-ha&category=integration)
+1. In Home Assistant, go to **Settings > Add-ons > Add-on Store**.
+2. Open the menu (top-right) and select **Repositories**.
+3. Add this repository URL: `https://github.com/spritter-org/spritter-ha`
+4. Open **Spritter Add-On** from the store and install it.
+5. Start the add-on.
 
-1. Open HACS > Integrations > Menu > **Custom repositories**.
-2. Add `https://github.com/spritter-org/spritter-ha` and choose type **Integration**
-3. Install **Spritter** from HACS
-4. Restart Home Assistant
+## Add-On UI
 
-### Manual Installation
+Open the add-on via sidebar/ingress. The UI lets you:
+- set `refresh_interval_seconds`,
+- add/remove stations (`provider`, `station_id`, optional `name`, optional `keys`),
+- save the config,
+- preview the aggregated price map.
 
-1. Clone this repository.
-2. Copy the `custom_components/spritter` folder into your `homeassistant/custom_components/` directory.
-3. Restart Home Assistant
+## Internal API
 
-## Configuration
+Base URL inside the add-on container: `http://127.0.0.1:8099`
 
-> Get supported providers and station IDs can be found in the [spritter library repository](https://github.com/spritter-org/spritter/?tab=readme-ov-file#providers)
+Endpoints:
+- `GET /api/v1/config`
+- `PUT /api/v1/config`
+- `GET /api/v1/price-map`
 
-### UI setup (recommended)
+Example response for `GET /api/v1/price-map`:
 
-1. Go to **Settings > Devices & Services > Add Integration**.
-2. Search for **Spritter**.
-3. Enter the base scan interval and at least one `provider` / `station_id` pair.
-4. After setup, make sure to **Configure** the integration in the UI.
-
-### YAML setup (legacy)
-
-Add the platform in `configuration.yaml`:
-
-```yaml
-sensor:
-  - platform: spritter
-    scan_interval:
-      minutes: 15
-    sources:
-      - provider: jet
-        station_id: "2640f98f48"
-        name: "JET Example"
-      - provider: omv
-        station_id: "AT123456"
-        name: "OMV Example"
-        keys:
-          - diesel
-          - super
+```json
+{
+  "generated_at": "2026-04-15T12:00:00+00:00",
+  "refresh_interval_seconds": 300,
+  "stations": [
+    {
+      "provider": "jet",
+      "station_id": "2640f98f48",
+      "name": "JET 2640f98f48",
+      "prices": {
+        "diesel": 1.539,
+        "super": 1.589
+      }
+    }
+  ]
+}
 ```
 
-**Schema:**
+## Notes
 
-| Option       | Required | Description                              |
-| ------------ | -------- | ---------------------------------------- |
-| `provider`   | Yes      | Provider id, e.g. `jet`, `omv`, `avanti` |
-| `station_id` | Yes      | Station identifier for the provider      |
-| `name`       | No       | Home Assistant entity name               |
-| `keys`       | No       | Filter returned fuel types               |
-
-## Development
-
-Install development dependencies:
-
-```bash
-python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
-```
+- The previous `custom_components` integration has been removed.
+- This add-on is the single source of configuration and data retrieval.

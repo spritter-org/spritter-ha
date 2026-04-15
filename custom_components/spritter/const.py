@@ -2,10 +2,7 @@ from datetime import timedelta
 
 DOMAIN = "spritter"
 
-CONF_SOURCES = "sources"
-CONF_PROVIDER = "provider"
-CONF_STATION_ID = "station_id"
-CONF_SCAN_INTERVAL_MINUTES = "scan_interval_minutes"
+ADDON_PRICE_MAP_ENDPOINT = "http://127.0.0.1:8099/api/v1/price-map"
+REQUEST_TIMEOUT_SECONDS = 30
 
-DEFAULT_SCAN_INTERVAL = timedelta(minutes=15)
-DEFAULT_SCAN_INTERVAL_MINUTES = 15
+DEFAULT_POLL_INTERVAL = timedelta(minutes=5)

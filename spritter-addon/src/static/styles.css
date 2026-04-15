@@ -1,0 +1,136 @@
+:root {
+  --bg: #f5f4ef;
+  --card: #ffffff;
+  --accent: #005f73;
+  --accent-2: #0a9396;
+  --text: #1f2933;
+  --muted: #52606d;
+  --danger: #b42318;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  color: var(--text);
+  background: radial-gradient(circle at top right, #e9d8a6 0%, var(--bg) 46%);
+}
+
+.layout {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+  display: grid;
+  gap: 16px;
+}
+
+.hero {
+  background: linear-gradient(125deg, var(--accent) 0%, var(--accent-2) 90%);
+  color: #ffffff;
+  padding: 18px 20px;
+  border-radius: 14px;
+  box-shadow: 0 8px 20px rgba(0, 95, 115, 0.2);
+}
+
+.hero h1 {
+  margin: 0 0 6px 0;
+  font-weight: 700;
+}
+
+.hero p {
+  margin: 0;
+  opacity: 0.95;
+}
+
+.card {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+}
+
+h2 {
+  margin-top: 0;
+}
+
+label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+}
+
+input,
+button {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #d9dee4;
+  font: inherit;
+}
+
+button {
+  background: var(--accent);
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: #344054;
+}
+
+button.remove {
+  background: var(--danger);
+  padding: 6px 10px;
+}
+
+.grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.station-list {
+  list-style: none;
+  padding: 0;
+  margin: 14px 0 0 0;
+  display: grid;
+  gap: 8px;
+}
+
+.station-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #111827;
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 12px;
+  min-height: 180px;
+}
+
+@media (max-width: 640px) {
+  .layout {
+    padding: 12px;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+}

@@ -1,3 +1,0 @@
-from typing import Any
-
-def image_to_string(image: Any) -> str: ...
