@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import timedelta
 import logging
@@ -36,6 +37,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 PRICE_UNIT = "€"
+REQUEST_TIMEOUT_SECONDS = 30
 
 CONF_USER_AGENT = "user_agent"
 CONF_KEYS = "keys"
@@ -117,14 +119,33 @@ async def _async_setup_sources(
 ) -> None:
     sources = [_parse_source_config(raw_source) for raw_source in raw_sources]
 
-    entities: list[SpritterFuelPriceSensor] = []
+    coordinators: list[tuple[SourceConfig, SpritterStationCoordinator]] = []
     for source in sources:
-        coordinator = SpritterStationCoordinator(
-            hass=hass,
-            source=source,
-            update_interval=scan_interval,
+        coordinators.append(
+            (
+                source,
+                SpritterStationCoordinator(
+                    hass=hass,
+                    source=source,
+                    update_interval=scan_interval,
+                ),
+            )
         )
-        await coordinator.async_refresh()
+
+    refresh_results = await asyncio.gather(
+        *(coordinator.async_refresh() for _, coordinator in coordinators),
+        return_exceptions=True,
+    )
+
+    entities: list[SpritterFuelPriceSensor] = []
+    for (source, coordinator), refresh_result in zip(coordinators, refresh_results):
+        if isinstance(refresh_result, Exception):
+            _LOGGER.warning(
+                "Initial refresh failed for source %s/%s: %s",
+                source.provider,
+                source.station_id,
+                refresh_result,
+            )
 
         fuel_types = sorted(
             source.keys if source.keys else (coordinator.data or {}).keys()
@@ -199,7 +220,14 @@ class SpritterStationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     for fuel_type, price in price_map.items()
                 }
 
-            return await self.hass.async_add_executor_job(_fetch_prices)
+            return await asyncio.wait_for(
+                self.hass.async_add_executor_job(_fetch_prices),
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError as err:
+            raise UpdateFailed(
+                f"Timed out fetching fuel prices after {REQUEST_TIMEOUT_SECONDS} seconds"
+            ) from err
         except Exception as err:
             raise UpdateFailed(str(err)) from err
 
@@ -242,6 +270,7 @@ class SpritterFuelPriceSensor(SensorEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         self._update_native_value()
+        self._update_attributes()
         self.async_write_ha_state()
 
     def _update_native_value(self) -> None:
@@ -259,6 +288,11 @@ class SpritterFuelPriceSensor(SensorEntity):
             "station_id": self._source.station_id,
             "fuel_type": self._fuel_type,
         }
+
+        if self.coordinator.last_update_success_time is not None:
+            attributes["last_refresh"] = (
+                self.coordinator.last_update_success_time.isoformat()
+            )
 
         if self._source.keys:
             attributes["keys"] = list(self._source.keys)
