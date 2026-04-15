@@ -29,7 +29,6 @@ class StationConfig:
     station_id: str
     name: str | None = None
     keys: list[str] | None = None
-    user_agent: str | None = None
 
 
 @dataclass(slots=True)
@@ -105,7 +104,6 @@ class ConfigStore:
                 station_id=str(item.get("station_id", "")).strip(),
                 name=(str(item["name"]).strip() if item.get("name") else None),
                 keys=[str(k).strip() for k in item.get("keys", []) if str(k).strip()] or None,
-                user_agent=(str(item["user_agent"]).strip() if item.get("user_agent") else None),
             )
             for item in raw.get("stations", [])
             if str(item.get("provider", "")).strip() and str(item.get("station_id", "")).strip()
@@ -130,7 +128,6 @@ def build_station_payload(station: StationConfig) -> dict[str, Any]:
         provider=station.provider,
         station_id=station.station_id,
         keys=tuple(station.keys) if station.keys else None,
-        user_agent=station.user_agent,
     )
 
     price_map = get_fuel_prices(request_obj).to_price_map(

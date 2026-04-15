@@ -1,5 +1,5 @@
 name: "Spritter"
-version: "1.0.10"
+version: "1.0.11"
 slug: "spritter"
 description: Fuel price getter with MQTT support
 url: https://github.com/spritter-org/spritter-ha
@@ -23,4 +23,3 @@ schema:
       station_id: str
       keys:
         - str?
-      user_agent: str?
