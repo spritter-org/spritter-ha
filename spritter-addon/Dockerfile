@@ -12,4 +12,4 @@ COPY src/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ /app/
-CMD ["python", "-m", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8099"]
+CMD ["python", "server.py"]

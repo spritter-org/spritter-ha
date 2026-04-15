@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
@@ -7,16 +8,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+import paho.mqtt.client as mqtt
 from spritter import FuelStationRequest, get_fuel_prices
 
 LOGGER = logging.getLogger("spritter_addon")
 logging.basicConfig(level=logging.INFO)
 
-HOST = "0.0.0.0"
-PORT = 8099
 DATA_DIR = Path("/data")
 CONFIG_FILE = DATA_DIR / "spritter_config.json"
+DEFAULT_MAX_PARALLELISM = 6
 
 
 @dataclass(slots=True)
@@ -29,14 +29,54 @@ class StationConfig:
 
 
 @dataclass(slots=True)
+class MqttConfig:
+    host: str
+    port: int = 1883
+    username: str | None = None
+    password: str | None = None
+    topic_prefix: str = "spritter/stations"
+    client_id: str = "spritter-addon"
+    qos: int = 0
+    retain: bool = False
+
+
+@dataclass(slots=True)
 class AppConfig:
     refresh_interval_seconds: int = 300
+    max_parallelism: int = DEFAULT_MAX_PARALLELISM
+    mqtt: MqttConfig | None = None
     stations: list[StationConfig] = field(default_factory=list)
+
+
+def _clamp(value: int, lower: int, upper: int) -> int:
+    return max(lower, min(upper, value))
 
 
 class ConfigStore:
     def __init__(self, config_path: Path) -> None:
         self._config_path = config_path
+
+    def _build_mqtt_config(self, raw: dict[str, Any]) -> MqttConfig | None:
+        mqtt_raw = raw.get("mqtt", {})
+        if not isinstance(mqtt_raw, dict):
+            LOGGER.warning("Config field 'mqtt' must be a JSON object")
+            return None
+
+        host = str(mqtt_raw.get("host", "")).strip()
+        if not host:
+            return None
+
+        topic_prefix = str(mqtt_raw.get("topic_prefix", "spritter/stations")).strip(" /")
+        return MqttConfig(
+            host=host,
+            port=_clamp(int(mqtt_raw.get("port", 1883)), 1, 65535),
+            username=(str(mqtt_raw["username"]) if mqtt_raw.get("username") else None),
+            password=(str(mqtt_raw["password"]) if mqtt_raw.get("password") else None),
+            topic_prefix=topic_prefix or "spritter/stations",
+            client_id=str(mqtt_raw.get("client_id", "spritter-addon")).strip() or "spritter-addon",
+            qos=_clamp(int(mqtt_raw.get("qos", 0)), 0, 2),
+            retain=bool(mqtt_raw.get("retain", False)),
+        )
 
     def _load(self) -> AppConfig:
         if not self._config_path.exists():
@@ -58,21 +98,19 @@ class ConfigStore:
                 station_id=str(item.get("station_id", "")).strip(),
                 name=(str(item["name"]).strip() if item.get("name") else None),
                 keys=[str(k).strip() for k in item.get("keys", []) if str(k).strip()] or None,
-                user_agent=(
-                    str(item["user_agent"]).strip()
-                    if item.get("user_agent")
-                    else None
-                ),
+                user_agent=(str(item["user_agent"]).strip() if item.get("user_agent") else None),
             )
             for item in raw.get("stations", [])
             if str(item.get("provider", "")).strip() and str(item.get("station_id", "")).strip()
         ]
 
-        refresh_interval_seconds = int(raw.get("refresh_interval_seconds", 300))
-        refresh_interval_seconds = max(10, min(3600, refresh_interval_seconds))
+        refresh_interval_seconds = _clamp(int(raw.get("refresh_interval_seconds", 300)), 10, 3600)
+        max_parallelism = _clamp(int(raw.get("max_parallelism", DEFAULT_MAX_PARALLELISM)), 1, 32)
 
         return AppConfig(
             refresh_interval_seconds=refresh_interval_seconds,
+            max_parallelism=max_parallelism,
+            mqtt=self._build_mqtt_config(raw),
             stations=stations,
         )
 
@@ -80,114 +118,121 @@ class ConfigStore:
         return self._load()
 
 
-def build_price_map(config: AppConfig) -> list[dict[str, Any]]:
-    stations_payload: list[dict[str, Any]] = []
-
-    for station in config.stations:
-        request_obj = FuelStationRequest(
-            provider=station.provider,
-            station_id=station.station_id,
-            keys=tuple(station.keys) if station.keys else None,
-            user_agent=station.user_agent,
-        )
-
-        price_map = get_fuel_prices(request_obj).to_price_map(
-            keys=tuple(station.keys) if station.keys else None
-        )
-
-        stations_payload.append(
-            {
-                "provider": station.provider,
-                "station_id": station.station_id,
-                "name": station.name or f"{station.provider.upper()} {station.station_id}",
-                "prices": {
-                    fuel_type: float(price) for fuel_type, price in price_map.items()
-                },
-            }
-        )
-
-    return stations_payload
-
-
-def find_station_config(
-    config: AppConfig, provider: str, station_id: str
-) -> StationConfig | None:
-    provider_key = provider.strip().lower()
-    station_key = station_id.strip()
-
-    for station in config.stations:
-        if (
-            station.provider.strip().lower() == provider_key
-            and station.station_id.strip() == station_key
-        ):
-            return station
-
-    return None
-
-
-def build_station_payload(
-    provider: str,
-    station_id: str,
-    station_config: StationConfig | None,
-) -> dict[str, Any]:
+def build_station_payload(station: StationConfig) -> dict[str, Any]:
     request_obj = FuelStationRequest(
-        provider=provider,
-        station_id=station_id,
-        keys=tuple(station_config.keys) if station_config and station_config.keys else None,
-        user_agent=station_config.user_agent if station_config else None,
+        provider=station.provider,
+        station_id=station.station_id,
+        keys=tuple(station.keys) if station.keys else None,
+        user_agent=station.user_agent,
     )
 
     price_map = get_fuel_prices(request_obj).to_price_map(
-        keys=tuple(station_config.keys) if station_config and station_config.keys else None
+        keys=tuple(station.keys) if station.keys else None
     )
 
     return {
-        "provider": provider,
-        "station_id": station_id,
-        "name": (
-            station_config.name
-            if station_config and station_config.name
-            else f"{provider.upper()} {station_id}"
-        ),
+        "provider": station.provider,
+        "station_id": station.station_id,
+        "name": station.name or f"{station.provider.upper()} {station.station_id}",
         "prices": {fuel_type: float(price) for fuel_type, price in price_map.items()},
     }
 
 
-app = FastAPI(title="Spritter Add-On")
-store = ConfigStore(CONFIG_FILE)
+async def fetch_station_payload(station: StationConfig, semaphore: asyncio.Semaphore) -> dict[str, Any]:
+    async with semaphore:
+        return await asyncio.to_thread(build_station_payload, station)
 
 
-@app.get("/")
-def root() -> dict[str, str]:
-    return {"status": "ok", "service": "spritter-addon"}
+async def collect_station_payloads(config: AppConfig) -> list[dict[str, Any]]:
+    semaphore = asyncio.Semaphore(config.max_parallelism)
+    tasks = [asyncio.create_task(fetch_station_payload(station, semaphore)) for station in config.stations]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    payloads: list[dict[str, Any]] = []
+    for station, result in zip(config.stations, results, strict=True):
+        if isinstance(result, Exception):
+            LOGGER.exception(
+                "Failed fetching station %s/%s",
+                station.provider,
+                station.station_id,
+                exc_info=result,
+            )
+            continue
+        payloads.append(result)
+
+    return payloads
 
 
-@app.get("/prices/")
-def get_prices(
-    provider: str = Query(..., min_length=1),
-    station_id: str = Query(..., alias="id", min_length=1),
-) -> dict[str, Any]:
-    config = store.get()
-    station_cfg = find_station_config(config, provider=provider, station_id=station_id)
+def publish_station_payloads(
+    mqtt_config: MqttConfig,
+    generated_at: str,
+    refresh_interval_seconds: int,
+    stations: list[dict[str, Any]],
+) -> None:
+    client = mqtt.Client(client_id=mqtt_config.client_id)
+    if mqtt_config.username:
+        client.username_pw_set(mqtt_config.username, mqtt_config.password)
 
+    client.connect(mqtt_config.host, mqtt_config.port, keepalive=60)
+    client.loop_start()
     try:
-        station = build_station_payload(
-            provider=provider,
-            station_id=station_id,
-            station_config=station_cfg,
-        )
-    except Exception as err:
-        LOGGER.exception("Failed to build station prices")
-        raise HTTPException(status_code=502, detail=str(err))
+        for station in stations:
+            topic = f"{mqtt_config.topic_prefix}/{station['provider']}/{station['station_id']}"
+            payload = {
+                "generated_at": generated_at,
+                "refresh_interval_seconds": refresh_interval_seconds,
+                "station": station,
+            }
+            message = json.dumps(payload, separators=(",", ":"))
+            publish_result = client.publish(topic, message, qos=mqtt_config.qos, retain=mqtt_config.retain)
+            publish_result.wait_for_publish()
 
-    return {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "refresh_interval_seconds": config.refresh_interval_seconds,
-        "station": station,
-    }
+        summary_topic = f"{mqtt_config.topic_prefix}/_summary"
+        summary_payload = {
+            "generated_at": generated_at,
+            "refresh_interval_seconds": refresh_interval_seconds,
+            "published_stations": len(stations),
+        }
+        summary_message = json.dumps(summary_payload, separators=(",", ":"))
+        client.publish(summary_topic, summary_message, qos=mqtt_config.qos, retain=mqtt_config.retain).wait_for_publish()
+    finally:
+        client.loop_stop()
+        client.disconnect()
+
+
+async def run() -> None:
+    store = ConfigStore(CONFIG_FILE)
+
+    while True:
+        config = store.get()
+        generated_at = datetime.now(timezone.utc).isoformat()
+
+        if not config.stations:
+            LOGGER.warning("No stations configured, waiting for next cycle")
+        elif config.mqtt is None:
+            LOGGER.warning("No MQTT broker configured under 'mqtt.host', waiting for next cycle")
+        else:
+            station_payloads = await collect_station_payloads(config)
+            if station_payloads:
+                try:
+                    await asyncio.to_thread(
+                        publish_station_payloads,
+                        config.mqtt,
+                        generated_at,
+                        config.refresh_interval_seconds,
+                        station_payloads,
+                    )
+                    LOGGER.info("Published %s station payloads", len(station_payloads))
+                except Exception:
+                    LOGGER.exception("Failed to publish payloads to MQTT")
+            else:
+                LOGGER.warning("No station payloads fetched successfully in this cycle")
+
+        await asyncio.sleep(config.refresh_interval_seconds)
 
 
 if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run("server:app", host=HOST, port=PORT)
+    try:
+        asyncio.run(run())
+    except KeyboardInterrupt:
+        LOGGER.info("Shutting down")

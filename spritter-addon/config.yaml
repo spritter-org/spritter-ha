@@ -1,7 +1,7 @@
 name: Spritter Add-On
-version: 0.2.1
+version: 1.0.0
 slug: spritter_addon
-description: Fuel price map API backed by a config file.
+description: Async fuel price collector that publishes station updates to MQTT.
 url: https://github.com/spritter-org/spritter-ha
 startup: application
 boot: auto
@@ -15,3 +15,5 @@ arch:
   - i386
 map:
   - addon_config:rw
+services:
+  - mqtt:true
