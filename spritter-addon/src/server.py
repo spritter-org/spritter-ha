@@ -251,7 +251,7 @@ def publish_station_payloads(
                     "icon": "mdi:gas-station",
                     "device": device_info,
                 }
-                client.publish(config_topic, json.dumps(config_payload), qos=1, retain=True)
+                client.publish(config_topic, json.dumps(config_payload), qos=1, retain=True).wait_for_publish()
 
             # Diagnostic: Last Update Timestamp
             ts_topic = f"homeassistant/sensor/{node_id}/last_update/config"
@@ -265,7 +265,7 @@ def publish_station_payloads(
                 "entity_category": "diagnostic",
                 "icon": "mdi:clock",
                 "device": device_info,
-            }), qos=1, retain=True)
+            }), qos=1, retain=True).wait_for_publish()
 
             # Diagnostic: Provider Name (Disabled by default)
             prov_topic = f"homeassistant/sensor/{node_id}/provider/config"
@@ -279,7 +279,7 @@ def publish_station_payloads(
                 "enabled_by_default": False,
                 "icon": "mdi:domain",
                 "device": device_info,
-            }), qos=1, retain=True)
+            }), qos=1, retain=True).wait_for_publish()
 
             # Diagnostic: Station ID (Disabled by default)
             id_topic = f"homeassistant/sensor/{node_id}/station_id/config"
@@ -293,7 +293,7 @@ def publish_station_payloads(
                 "enabled_by_default": False,
                 "icon": "mdi:identifier",
                 "device": device_info,
-            }), qos=1, retain=True)
+            }), qos=1, retain=True).wait_for_publish()
 
             payload = {
                 "generated_at": generated_at,
@@ -309,8 +309,8 @@ def publish_station_payloads(
             )
             message = json.dumps(payload, separators=(",", ":"))
             
-            # Force retain=True for the state payload
-            publish_result = client.publish(topic, message, qos=mqtt_config.qos, retain=True)
+            # Force retain=True and QoS=1 to guarantee delivery before disconnect
+            publish_result = client.publish(topic, message, qos=1, retain=True)
             publish_result.wait_for_publish()
 
         summary_topic = f"{mqtt_config.topic_prefix}/_summary"
