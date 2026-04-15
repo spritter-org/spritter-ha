@@ -8,7 +8,7 @@ boot: auto
 init: false
 ingress: false
 services:
-  - mqtt: need
+  - "mqtt:need"
 arch:
   - aarch64
   - amd64
