@@ -1,5 +1,5 @@
 name: "Spritter"
-version: "1.0.17"
+version: "1.0.18"
 slug: "spritter"
 description: Fuel price getter with MQTT support
 url: https://github.com/spritter-org/spritter-ha
